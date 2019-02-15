@@ -48,6 +48,10 @@ type Manager interface {
 	// implements the inject interface - e.g. inject.Client
 	Add(Runnable) error
 
+	// ServeMetrics serves the metrics until the stop channel is closed.
+	// It serves the metrics on `/metrics` on the port configured through the MetricsBindAddress.
+	ServeMetrics(<-chan struct{})
+
 	// SetFields will set any dependencies on an object for which the object has implemented the inject
 	// interface - e.g. inject.Client.
 	SetFields(interface{}) error
@@ -120,6 +124,11 @@ type Options struct {
 	// MetricsBindAddress is the TCP address that the controller should bind to
 	// for serving prometheus metrics
 	MetricsBindAddress string
+
+	// MetricsServingDisabled does not serve the metrics. This can be used when
+	// user wants to serve the metrics separately.
+	// If not set it is set to false by default.
+	MetricsServingDisabled bool
 
 	// Functions to all for a user to customize the values that will be injected.
 
@@ -215,7 +224,7 @@ func New(config *rest.Config, options Options) (Manager, error) {
 		return nil, err
 	}
 
-	// Create the mertics listener. This will throw an error if the metrics bind
+	// Create the metrics listener. This will throw an error if the metrics bind
 	// address is invalid or already in use.
 	metricsListener, err := options.newMetricsListener(options.MetricsBindAddress)
 	if err != nil {
@@ -225,19 +234,20 @@ func New(config *rest.Config, options Options) (Manager, error) {
 	stop := make(chan struct{})
 
 	return &controllerManager{
-		config:           config,
-		scheme:           options.Scheme,
-		admissionDecoder: admissionDecoder,
-		errChan:          make(chan error),
-		cache:            cache,
-		fieldIndexes:     cache,
-		client:           writeObj,
-		recorderProvider: recorderProvider,
-		resourceLock:     resourceLock,
-		mapper:           mapper,
-		metricsListener:  metricsListener,
-		internalStop:     stop,
-		internalStopper:  stop,
+		config:                 config,
+		scheme:                 options.Scheme,
+		admissionDecoder:       admissionDecoder,
+		errChan:                make(chan error),
+		cache:                  cache,
+		fieldIndexes:           cache,
+		client:                 writeObj,
+		recorderProvider:       recorderProvider,
+		resourceLock:           resourceLock,
+		mapper:                 mapper,
+		metricsListener:        metricsListener,
+		metricsServingDisabled: options.MetricsServingDisabled,
+		internalStop:           stop,
+		internalStopper:        stop,
 	}, nil
 }
 
